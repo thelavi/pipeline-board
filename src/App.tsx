@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Board } from './components/Board/Board'
+import { BulkMoveBar } from './components/BulkMoveBar/BulkMoveBar'
 import { LiveRegion } from './components/LiveRegion/LiveRegion'
 import { ToastStack } from './components/Toast/ToastStack'
 import './App.css'
@@ -29,6 +30,7 @@ function App() {
 
   return (
     <>
+      <BulkMoveBar />
       <Board />
       <ToastStack />
       <LiveRegion />

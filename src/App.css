@@ -9,6 +9,12 @@ body {
   font-family: system-ui, sans-serif;
 }
 
+#root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
 .board-loading {
   padding: 40px;
   font-size: 15px;
@@ -21,7 +27,8 @@ body {
   overflow-x: auto;
   padding: 16px;
   align-items: flex-start;
-  height: 100vh;
+  flex: 1;
+  min-height: 0;
 }
 
 .column {
@@ -205,5 +212,81 @@ body {
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+.bulk-bar {
+  flex: none;
+  background: #e4e8ec;
+  border-bottom: 1px solid #d7dde3;
+  padding: 10px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bulk-bar__filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.bulk-bar__filters select,
+.bulk-bar__filters input {
+  font-size: 12.5px;
+  border: 1px solid #c3cbd3;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #161a1f;
+  padding: 5px 7px;
+}
+
+.bulk-bar__filters input[type='number'] {
+  width: 90px;
+}
+
+.bulk-bar__filters button {
+  font-size: 12.5px;
+  font-weight: 600;
+  border: none;
+  border-radius: 5px;
+  background: #1f7d78;
+  color: white;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+.bulk-bar__filters button:disabled {
+  background: #9aa5b1;
+  cursor: not-allowed;
+}
+
+.bulk-bar__error {
+  font-size: 12.5px;
+  color: #b34343;
+}
+
+.bulk-bar__progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  color: #586170;
+  font-variant-numeric: tabular-nums;
+}
+
+.bulk-bar__bar {
+  width: 200px;
+  height: 6px;
+  border-radius: 3px;
+  background: #d7dde3;
+  overflow: hidden;
+  flex: none;
+}
+
+.bulk-bar__bar-fill {
+  height: 100%;
+  background: #1f7d78;
+  transition: width 150ms ease;
 }
 

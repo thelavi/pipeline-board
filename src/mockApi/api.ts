@@ -5,7 +5,7 @@ import {
   stopChangeStream,
   subscribeToChangeStream,
 } from './changeStream'
-import { getSnapshot, moveOpportunityInDb } from './db'
+import { getOwners, getSnapshot, moveOpportunityInDb } from './db'
 import { simulateRead, simulateWrite } from './network'
 import type { BulkFilter, BulkJobStatus, Opportunity, Stage } from './types'
 
@@ -29,6 +29,10 @@ export async function startBulkMove(
 
 export async function getBulkJobStatus(jobId: string): Promise<BulkJobStatus | undefined> {
   return simulateRead(() => getBulkJobStatusInternal(jobId))
+}
+
+export function getKnownOwners(): string[] {
+  return getOwners()
 }
 
 export { restartChangeStream, startChangeStream, stopChangeStream, subscribeToChangeStream }
