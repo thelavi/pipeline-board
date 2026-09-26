@@ -88,6 +88,22 @@ body {
   border-radius: 8px;
   padding: 9px 10px;
   box-shadow: 0 1px 2px rgba(22, 26, 31, 0.06);
+  cursor: grab;
+  touch-action: none;
+}
+
+.card--pending {
+  border-color: #1f7d78;
+  box-shadow: 0 0 0 1px #dceeed;
+}
+
+.card--dragging {
+  opacity: 0.4;
+}
+
+.card:focus-visible {
+  outline: 2px solid #1f7d78;
+  outline-offset: 2px;
 }
 
 .card__top {
@@ -137,5 +153,57 @@ body {
 .badge--abandoned {
   background: #f8e2e2;
   color: #b34343;
+}
+
+.card__move-to {
+  font-size: 10.5px;
+  border: 1px solid #c3cbd3;
+  border-radius: 5px;
+  background: #e4e8ec;
+  color: #586170;
+  max-width: 90px;
+}
+
+.toast-stack {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 50;
+}
+
+.toast {
+  background: #161a1f;
+  color: #eef1f4;
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 8px 24px -12px rgba(22, 26, 31, 0.4);
+}
+
+.toast button {
+  background: #b34343;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  padding: 4px 9px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.live-region {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 

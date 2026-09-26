@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Board } from './components/Board/Board'
+import { LiveRegion } from './components/LiveRegion/LiveRegion'
+import { ToastStack } from './components/Toast/ToastStack'
 import './App.css'
 import { DevPanel, fetchPipeline, startChangeStream } from './mockApi'
 import { useBoardStore } from './store/board.store'
@@ -28,6 +30,8 @@ function App() {
   return (
     <>
       <Board />
+      <ToastStack />
+      <LiveRegion />
       <DevPanel />
     </>
   )

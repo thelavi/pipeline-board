@@ -1,16 +1,48 @@
+import { DndContext, type DragEndEvent, type DragStartEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { Column } from '../Column/Column'
 import { useChangeStreamSubscription } from '../../hooks/useChangeStreamSubscription'
+import { useOptimisticMove } from '../../hooks/useOptimisticMove'
 import { useBoardStore } from '../../store/board.store'
 
 export function Board() {
   const stages = useBoardStore((s) => s.stages)
+  const setDraggingId = useBoardStore((s) => s.setDraggingId)
+  const moveCard = useOptimisticMove()
   useChangeStreamSubscription()
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+  )
+
+  function handleDragStart(event: DragStartEvent) {
+    setDraggingId(String(event.active.id))
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const opportunityId = String(event.active.id)
+    const toStageId = event.over ? String(event.over.id) : null
+    setDraggingId(null)
+    if (!toStageId) return
+    const stage = stages.find((s) => s.id === toStageId)
+    if (stage) moveCard(opportunityId, toStageId, stage.name)
+  }
+
+  function handleDragCancel() {
+    setDraggingId(null)
+  }
+
   return (
-    <div className="board">
-      {stages.map((stage) => (
-        <Column key={stage.id} stage={stage} allStages={stages} />
-      ))}
-    </div>
+    <DndContext
+      sensors={sensors}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
+    >
+      <div className="board">
+        {stages.map((stage) => (
+          <Column key={stage.id} stage={stage} allStages={stages} />
+        ))}
+      </div>
+    </DndContext>
   )
 }
