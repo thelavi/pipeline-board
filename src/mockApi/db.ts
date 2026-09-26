@@ -42,10 +42,17 @@ function randomValue(): number {
 }
 
 function makeOpportunity(stageId: string): Opportunity {
-  const id = `opp-${nextId++}`
+  // A globally-unique id (not a per-session counter) matters specifically for bulk-job
+  // refresh-survival: this mock "server" has no persistence, so a refresh reseeds an
+  // entirely fresh dataset. If ids restarted at 1 each time, a resumed job's stale
+  // pendingIds would collide with unrelated newly-seeded cards and silently mutate the
+  // wrong ones while reporting success. A UUID makes a stale id reliably resolve to
+  // nothing post-refresh, so it fails honestly instead of corrupting quietly.
+  const id = `opp-${crypto.randomUUID()}`
+  const displayNumber = nextId++
   return {
     id,
-    name: `Deal ${id.split('-')[1]}`,
+    name: `Deal ${displayNumber}`,
     value: randomValue(),
     status: randomStatus(stageId),
     owner: OWNERS[Math.floor(Math.random() * OWNERS.length)],
@@ -78,6 +85,10 @@ export function getStages(): Stage[] {
   return stages
 }
 
+export function getOwners(): string[] {
+  return OWNERS
+}
+
 export function getSnapshot(): { stages: Stage[]; opportunitiesByStage: Record<string, Opportunity[]> } {
   const opportunitiesByStage: Record<string, Opportunity[]> = {}
   for (const stage of stages) {
@@ -92,18 +103,22 @@ export function getOpportunity(id: string): Opportunity | undefined {
   return opportunities.get(id)
 }
 
+function removeFromStageOrder(stageId: string, id: string): void {
+  const list = orderByStage.get(stageId)
+  if (!list) return
+  const idx = list.indexOf(id)
+  if (idx !== -1) list.splice(idx, 1)
+}
+
 export function moveOpportunityInDb(id: string, toStageId: string): Opportunity {
   const opp = opportunities.get(id)
   if (!opp) throw new Error(`opportunity ${id} not found`)
-  if (!orderByStage.has(toStageId)) throw new Error(`stage ${toStageId} not found`)
+  const toList = orderByStage.get(toStageId)
+  if (!toList) throw new Error(`stage ${toStageId} not found`)
 
   if (opp.stageId !== toStageId) {
-    const fromList = orderByStage.get(opp.stageId)
-    if (fromList) {
-      const idx = fromList.indexOf(id)
-      if (idx !== -1) fromList.splice(idx, 1)
-    }
-    orderByStage.get(toStageId)!.unshift(id)
+    removeFromStageOrder(opp.stageId, id)
+    toList.unshift(id)
   }
 
   const updated: Opportunity = { ...opp, stageId: toStageId, updatedAt: Date.now(), version: opp.version + 1 }
@@ -132,11 +147,7 @@ export function createOpportunityInDb(stageId: string): Opportunity {
 export function deleteOpportunityInDb(id: string): boolean {
   const opp = opportunities.get(id)
   if (!opp) return false
-  const list = orderByStage.get(opp.stageId)
-  if (list) {
-    const idx = list.indexOf(id)
-    if (idx !== -1) list.splice(idx, 1)
-  }
+  removeFromStageOrder(opp.stageId, id)
   opportunities.delete(id)
   return true
 }
