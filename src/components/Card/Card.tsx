@@ -30,6 +30,7 @@ function CardImpl({ opportunityId, stages }: CardProps) {
 
   return (
     <div
+      id={`card-${opportunityId}`}
       ref={setNodeRef}
       className={`card${isPending ? ' card--pending' : ''}${isDragging ? ' card--dragging' : ''}`}
       style={style}

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { getKnownOwners } from '../../mockApi'
 import type { Status } from '../../mockApi'
 import { useBulkJob } from '../../hooks/useBulkJob'
@@ -39,6 +39,17 @@ export function BulkMoveBar() {
 
   const isTerminal = status?.status === 'completed' || status?.status === 'failed'
   const progressPct = status && status.total > 0 ? (status.processed / status.total) * 100 : 0
+
+  // A keyboard/screen-reader user who started the job has no card to return focus to —
+  // the completion summary itself is the sensible landing spot once the job finishes.
+  const progressRef = useRef<HTMLDivElement>(null)
+  const wasTerminal = useRef(false)
+  useEffect(() => {
+    if (isTerminal && !wasTerminal.current) {
+      progressRef.current?.focus()
+    }
+    wasTerminal.current = isTerminal
+  }, [isTerminal])
 
   return (
     <form className="bulk-bar" onSubmit={handleSubmit}>
@@ -120,7 +131,7 @@ export function BulkMoveBar() {
       )}
 
       {status && (
-        <div className="bulk-bar__progress" role="status">
+        <div className="bulk-bar__progress" role="status" ref={progressRef} tabIndex={-1}>
           {isTerminal ? (
             <span>
               {status.status === 'completed' ? 'Done' : 'Stopped'} — {formatCount(status.succeeded)} moved

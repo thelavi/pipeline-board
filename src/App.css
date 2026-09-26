@@ -275,6 +275,12 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.bulk-bar__progress:focus-visible {
+  outline: 2px solid #1f7d78;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 .bulk-bar__bar {
   width: 200px;
   height: 6px;

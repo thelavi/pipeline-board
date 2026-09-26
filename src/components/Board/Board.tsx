@@ -1,4 +1,12 @@
-import { DndContext, type DragEndEvent, type DragStartEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
+import {
+  DndContext,
+  type DragEndEvent,
+  type DragStartEvent,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
 import { Column } from '../Column/Column'
 import { useChangeStreamSubscription } from '../../hooks/useChangeStreamSubscription'
 import { useOptimisticMove } from '../../hooks/useOptimisticMove'
@@ -12,6 +20,7 @@ export function Board() {
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor),
   )
 
   function handleDragStart(event: DragStartEvent) {
