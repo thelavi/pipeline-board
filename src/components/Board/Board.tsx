@@ -23,8 +23,7 @@ export function Board() {
     const toStageId = event.over ? String(event.over.id) : null
     setDraggingId(null)
     if (!toStageId) return
-    const stage = stages.find((s) => s.id === toStageId)
-    if (stage) moveCard(opportunityId, toStageId, stage.name)
+    moveCard(opportunityId, toStageId)
   }
 
   function handleDragCancel() {

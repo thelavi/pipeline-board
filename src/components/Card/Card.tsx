@@ -54,8 +54,7 @@ function CardImpl({ opportunityId, stages }: CardProps) {
           onPointerDown={(e) => e.stopPropagation()}
           onChange={(e) => {
             const toStageId = e.target.value
-            const stage = stages.find((s) => s.id === toStageId)
-            if (toStageId && stage) moveCard(opportunityId, toStageId, stage.name)
+            if (toStageId) moveCard(opportunityId, toStageId)
             e.target.value = ''
           }}
         >
