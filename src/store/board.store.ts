@@ -9,6 +9,15 @@ export interface StageAgg {
 interface PendingMove {
   fromStageId: string
   fromIndex: number
+  /**
+   * Id of the card that sat immediately before this one in its origin list at move-start
+   * (null if it was first). A raw index alone goes stale if the stream inserts/removes
+   * cards above it while the move is in flight — reinserting at that same numeric index
+   * on rollback would land next to the wrong neighbor. Anchoring to a neighbor's id and
+   * finding wherever THAT neighbor currently sits stays correct regardless of what else
+   * moved around it; fromIndex is kept only as a fallback if the neighbor itself is gone.
+   */
+  fromNeighborId: string | null
 }
 
 interface BoardState {
@@ -85,6 +94,12 @@ function adjustAgg(stageAgg: Map<string, StageAgg>, stageId: string, deltaCount:
   })
 }
 
+/** A card with an in-flight optimistic move, or currently under an active drag, is off
+ * limits to every stream reconciliation function — this is the guard all three share. */
+function isProtectedFromStream(pendingMoves: Map<string, PendingMove>, draggingId: string | null, id: string): boolean {
+  return pendingMoves.has(id) || draggingId === id
+}
+
 export const useBoardStore = create<BoardState>((set, get) => ({
   stages: [],
   opportunitiesById: new Map(),
@@ -127,13 +142,17 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     const nextPending = new Map(pendingMoves)
     const nextOpps = new Map(opportunitiesById)
 
-    const fromIndex = removeFromOrder(nextOrder, fromStageId, id)
+    const originList = orderByStage.get(fromStageId) ?? []
+    const originIndex = originList.indexOf(id)
+    const fromNeighborId = originIndex > 0 ? originList[originIndex - 1] : null
+
+    removeFromOrder(nextOrder, fromStageId, id)
     insertIntoOrder(nextOrder, toStageId, id, 0)
     adjustAgg(nextAgg, fromStageId, -1, -opp.value)
     adjustAgg(nextAgg, toStageId, 1, opp.value)
 
     nextOpps.set(id, { ...opp, stageId: toStageId })
-    nextPending.set(id, { fromStageId, fromIndex: fromIndex === -1 ? 0 : fromIndex })
+    nextPending.set(id, { fromStageId, fromIndex: originIndex === -1 ? 0 : originIndex, fromNeighborId })
 
     set({ orderByStage: nextOrder, stageAgg: nextAgg, pendingMoves: nextPending, opportunitiesById: nextOpps })
   },
@@ -160,7 +179,16 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
     const currentStageId = opp.stageId
     removeFromOrder(nextOrder, currentStageId, id)
-    insertIntoOrder(nextOrder, pending.fromStageId, id, pending.fromIndex)
+
+    const targetList = nextOrder.get(pending.fromStageId) ?? []
+    let insertIndex: number
+    if (pending.fromNeighborId === null) {
+      insertIndex = 0
+    } else {
+      const neighborIndex = targetList.indexOf(pending.fromNeighborId)
+      insertIndex = neighborIndex === -1 ? Math.min(pending.fromIndex, targetList.length) : neighborIndex + 1
+    }
+    insertIntoOrder(nextOrder, pending.fromStageId, id, insertIndex)
     adjustAgg(nextAgg, currentStageId, -1, -opp.value)
     adjustAgg(nextAgg, pending.fromStageId, 1, opp.value)
 
@@ -174,7 +202,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   applyStreamMove: (opportunity, fromStageId) => {
     const { opportunitiesById, orderByStage, stageAgg, pendingMoves, draggingId } = get()
-    if (pendingMoves.has(opportunity.id) || draggingId === opportunity.id) return
+    if (isProtectedFromStream(pendingMoves, draggingId, opportunity.id)) return
     const existing = opportunitiesById.get(opportunity.id)
     if (existing && existing.version >= opportunity.version) return
 
@@ -195,7 +223,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   applyStreamEdit: (opportunity) => {
     const { opportunitiesById, stageAgg, pendingMoves, draggingId } = get()
-    if (pendingMoves.has(opportunity.id) || draggingId === opportunity.id) return
+    if (isProtectedFromStream(pendingMoves, draggingId, opportunity.id)) return
     const existing = opportunitiesById.get(opportunity.id)
     if (!existing || existing.version >= opportunity.version) return
 
@@ -223,7 +251,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   applyStreamDelete: (id, stageId) => {
     const { opportunitiesById, orderByStage, stageAgg, pendingMoves, draggingId } = get()
-    if (pendingMoves.has(id) || draggingId === id) return
+    if (isProtectedFromStream(pendingMoves, draggingId, id)) return
     const existing = opportunitiesById.get(id)
     if (!existing) return
 
