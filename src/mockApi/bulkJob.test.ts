@@ -72,6 +72,35 @@ describe('board reconciliation bridge', () => {
   })
 })
 
+describe('terminal job pruning', () => {
+  it('drops a job record once it has been terminal past the grace window, but leaves a newer active job alone', async () => {
+    useMockApiConfig.getState().set({ failureRate: 0, bulkJobChunkSize: 100, bulkJobTickMs: 5 })
+
+    vi.useFakeTimers()
+    const jobA = startBulkJob({ stageId: 'closed-lost' }, 'contacted')
+    expect(jobA.totalMatched).toBe(TOTAL)
+    await vi.advanceTimersByTimeAsync(10) // job A completes in one tick
+    expect(getBulkJobStatus(jobA.jobId)?.status).toBe('completed')
+
+    await vi.advanceTimersByTimeAsync(6000) // past the 5s grace window, no further ticks needed
+
+    // 'closed-won' is a second, disjoint, fixed-size stage (250 rows) — starting this job is
+    // what triggers the prune sweep, and it must not disturb the newly-created record itself.
+    useMockApiConfig.getState().set({ bulkJobChunkSize: 300 }) // covers all 250 in one tick
+    const jobB = startBulkJob({ stageId: 'closed-won' }, 'qualified')
+    expect(jobB.totalMatched).toBe(250)
+
+    expect(getBulkJobStatus(jobA.jobId)).toBeUndefined()
+    expect(getBulkJobStatus(jobB.jobId)).toBeDefined()
+
+    // Let job B run to completion so bulkJobs.ts's shared ticking timer self-clears back to
+    // null before the next test — otherwise it's left pointing at a stale fake-timer handle
+    // that makes the next test's ensureTicking() wrongly think a timer is already running.
+    await vi.advanceTimersByTimeAsync(10)
+    expect(getBulkJobStatus(jobB.jobId)?.status).toBe('completed')
+  })
+})
+
 describe('refresh survival', () => {
   it('resumes a job from persisted state after a simulated page refresh, and still finishes without lying about the total', async () => {
     useMockApiConfig.getState().set({ bulkJobChunkSize: 10, bulkJobTickMs: 5 })

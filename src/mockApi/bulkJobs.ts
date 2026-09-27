@@ -5,11 +5,27 @@ import type { BulkFilter, BulkJobStatus } from './types'
 
 interface InternalJob extends BulkJobStatus {
   pendingIds: string[]
+  terminalAt: number | null
 }
 
 const STORAGE_KEY = 'pipeline-board:bulk-jobs'
+// A finished job is never read again once useBulkJob's poll has seen its terminal status and
+// stopped watching it (no job-history view exists anywhere in this app). Without pruning, `jobs`
+// grows by one entry for every bulk move ever started in a session and stays there forever —
+// this grace window just guarantees the client's poll (every 400ms) has had a chance to observe
+// the terminal state at least once before the record is dropped.
+const TERMINAL_JOB_GRACE_MS = 5000
 const jobs = new Map<string, InternalJob>()
 let timer: ReturnType<typeof setInterval> | null = null
+
+function pruneOldTerminalJobs(): void {
+  const now = Date.now()
+  for (const [id, job] of jobs) {
+    if (job.terminalAt !== null && now - job.terminalAt > TERMINAL_JOB_GRACE_MS) {
+      jobs.delete(id)
+    }
+  }
+}
 
 function persist(): void {
   if (typeof window === 'undefined') return
@@ -57,6 +73,7 @@ function tick(): void {
 
     if (job.pendingIds.length === 0) {
       job.status = 'completed'
+      job.terminalAt = Date.now()
     }
   }
 
@@ -68,11 +85,13 @@ function tick(): void {
 }
 
 export function startBulkJob(filter: BulkFilter, toStageId: string): { jobId: string; totalMatched: number } {
+  pruneOldTerminalJobs()
   const matchedIds = findMatchingIds(filter)
   const id = `job-${Date.now()}-${Math.floor(Math.random() * 100000)}`
+  const isImmediatelyDone = matchedIds.length === 0
   const job: InternalJob = {
     id,
-    status: matchedIds.length === 0 ? 'completed' : 'queued',
+    status: isImmediatelyDone ? 'completed' : 'queued',
     total: matchedIds.length,
     processed: 0,
     succeeded: 0,
@@ -80,6 +99,7 @@ export function startBulkJob(filter: BulkFilter, toStageId: string): { jobId: st
     toStageId,
     startedAt: Date.now(),
     pendingIds: matchedIds,
+    terminalAt: isImmediatelyDone ? Date.now() : null,
   }
   jobs.set(id, job)
   persist()
@@ -101,6 +121,7 @@ export function restoreJobsFromStorage(): void {
   try {
     const parsed: InternalJob[] = JSON.parse(raw)
     for (const job of parsed) jobs.set(job.id, job)
+    pruneOldTerminalJobs()
     ensureTicking()
   } catch {
     window.localStorage.removeItem(STORAGE_KEY)
