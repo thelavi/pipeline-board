@@ -108,6 +108,12 @@ body {
   opacity: 0.4;
 }
 
+.card--overlay {
+  cursor: grabbing;
+  box-shadow: 0 12px 28px -8px rgba(22, 26, 31, 0.35);
+  width: 244px;
+}
+
 .card:focus-visible {
   outline: 2px solid #1f7d78;
   outline-offset: 2px;

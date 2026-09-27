@@ -1,5 +1,6 @@
 import {
   DndContext,
+  DragOverlay,
   type DragEndEvent,
   type DragStartEvent,
   KeyboardSensor,
@@ -8,12 +9,14 @@ import {
   useSensors,
 } from '@dnd-kit/core'
 import { Column } from '../Column/Column'
+import { CardDragPreview } from '../Card/CardDragPreview'
 import { useChangeStreamSubscription } from '../../hooks/useChangeStreamSubscription'
 import { useOptimisticMove } from '../../hooks/useOptimisticMove'
 import { useBoardStore } from '../../store/board.store'
 
 export function Board() {
   const stages = useBoardStore((s) => s.stages)
+  const draggingId = useBoardStore((s) => s.draggingId)
   const setDraggingId = useBoardStore((s) => s.setDraggingId)
   const moveCard = useOptimisticMove()
   useChangeStreamSubscription()
@@ -51,6 +54,7 @@ export function Board() {
           <Column key={stage.id} stage={stage} />
         ))}
       </div>
+      <DragOverlay>{draggingId ? <CardDragPreview opportunityId={draggingId} /> : null}</DragOverlay>
     </DndContext>
   )
 }
