@@ -104,10 +104,10 @@ updates, and whatever re-renders result) on the main thread, for up to 500 cards
 Before that fix, bulk-job ticks were nearly free on the client, because the client didn't know
 they were happening — cheap, but silently wrong. This tradeoff is real and worth stating rather
 than hiding: correctness (the board now actually reflects bulk moves live) was chosen over this
-main-thread cost, and the fix that would resolve both — batching the emitted events per tick
-instead of one per card, or moving the per-tick reconciliation off the main thread — is the
-**first thing named in "what I'd do with another week"** in `DESIGN.md`, directly motivated by
-this measurement.
+main-thread cost, and the fix that would resolve both — eliminating the O(n) `opportunitiesById`
+copy every stream handler currently does per event — is named directly in **"what I'd do with
+another week"** in `DESIGN.md`, motivated by this exact measurement. (It's ranked #2 there, after
+a correctness bug found in the same review pass — a wrong-state bug outranks a performance one.)
 
 *(A parallel measurement of keyboard-drag latency specifically during an active bulk job was
 attempted but not cleanly captured — the job completed faster in wall-clock time than the retry

@@ -11,7 +11,7 @@ still mine to own and defend as if I'd written it myself.
 | Library | Role | Why this one |
 |---|---|---|
 | **Zustand** | client state | Selector-based subscriptions re-render only the component reading a changed slice — essential at 10k+ rows, where React Context re-renders every consumer on any Provider value change regardless of what it reads. Its direct `store.foo()` call style matches how this state is actually used: imperative commands with encapsulated invariants, not a dispatched-action log anyone needs to replay. (Vue equivalent: Pinia, for the same selector-granularity reason over a single reactive `provide`/`inject` tree.) |
-| **dnd-kit/core** | drag-and-drop | Ships `PointerSensor` and `KeyboardSensor` as equally first-class, swappable inputs. react-beautiful-dnd (the obvious alternative) is unmaintained and has no real keyboard-accessible sensor — the brief's keyboard requirement would have meant hand-rolling a second interaction system alongside it. |
+| **dnd-kit/core** | drag-and-drop | Ships `PointerSensor` and `KeyboardSensor` as equally first-class, swappable inputs. react-beautiful-dnd (the obvious alternative) is archived/unmaintained, and its keyboard support — built for reordering within a single list — is known to be unreliable for moving an item across separate lists, which is this board's primary interaction. |
 | **@tanstack/react-virtual** | column virtualization | The entire answer to "10,000 cards in one column." Mounts only rows near the visible scroll window. (Vue equivalent: `@tanstack/vue-virtual`, same core.) |
 | **Vitest** | test runner | Reuses the exact Vite config already driving the dev server — no second build pipeline to keep in sync. Native ESM, materially faster than Jest, and API-compatible (`describe`/`it`/`expect`) so nothing about test-writing style changes. |
 
@@ -204,11 +204,15 @@ Every async outcome — move started, move confirmed, move failed and rolled bac
 progress — is pushed through an `aria-live="polite"` region, so a screen-reader user hears the
 outcome without needing to have focus anywhere near where it happened.
 
-**What I'd fix first, given more time:** keyboard drag has been verified through code reading and
-dnd-kit's own documented keyboard sensor behavior, but not yet confirmed by my own hand on a real
-mouse-free pass through every interaction (drag, bulk move, retry). That's the single highest-
-priority verification gap in this build — not because the mechanism is unusual, but because it's
-the one path I have the least first-hand confidence in relative to how much the brief weights it.
+The focus-chasing itself has a real edge case, not just a theoretical one — see Known gaps below:
+if the target card falls outside the column's current virtualized window, the element it's looking
+for doesn't exist yet and the focus call is a silent no-op.
+
+**Verified, not just reasoned about:** a full mouse-free pass was driven directly through the
+browser — Tab to a card, Space to pick it up, arrow keys to move it across a column boundary,
+Space to drop. The column counts and totals updated correctly on both ends (10,000/5,000 →
+9,999/5,001) with no mouse input at any point. This isn't inferred from dnd-kit's documentation or
+from reading the sensor's source — it's an observed, reproducible result.
 
 ## What breaks at 10×
 
@@ -224,16 +228,33 @@ assuming it's fine.
 linear scan (`for (const opp of opportunities.values())`) over the entire dataset, executed
 **inside the request that starts the job**, before any chunking begins. At 500,000 records, that
 scan alone could be tens to low-hundreds of milliseconds of blocked main thread before the job
-handle is even returned — today's version-history job engine already chunks *processing*, but
+handle is even returned — today's job engine already chunks *processing*, but
 never chunks or defers the initial *match-finding* step. That's the first thing I'd fix if this
 number were real: make `findMatchingIds` itself incremental/chunked, or move it off the main
 thread.
 
 ## Known gaps, said plainly
 
+- **The rollback guarantee above holds for one in-flight move per card, not two.** Nothing stops a
+  card from being dragged again before its first move's network call resolves — `useDraggable` has
+  no guard tied to `isPending`. `beginOptimisticMove` unconditionally overwrites the existing
+  `pendingMoves` entry, so the second drag's anchor replaces the first's. If the first call
+  resolves after that, `confirmMove` deletes what is now the *second* drag's pending entry and
+  snaps the card to the first call's destination — visibly wrong, since the card was already moved
+  on. If the second call then fails, `rollbackMove` finds no pending entry left (already deleted)
+  and silently no-ops, while the toast still fires and claims the card "was returned to its
+  previous stage" — which may not be true. Found during this project's own review, not covered by
+  the current test suite (which only exercises a single in-flight move per card), and the single
+  highest-priority correctness bug in this codebase.
+- **Post-move focus can silently fail to land anywhere.** `focusCardWhenRendered` calls
+  `document.getElementById('card-' + id)` with no fallback. If the card's post-move or
+  post-rollback position falls outside its column's current virtualized visible+overscan window
+  (for example: the user scrolls the origin column elsewhere during the 300–1500ms the network
+  call is in flight), the element doesn't exist yet and focus goes nowhere — the announcer still
+  reports the outcome via `aria-live`, but a keyboard/screen-reader user's focus itself is left
+  wherever it happened to be, not "somewhere sensible" as the brief requires.
 - `stageAgg`'s incremental-delta invariant (every mutator must call `adjustAgg`) is not covered by
   a dedicated test that would catch a missed call site causing silent header drift.
-- Keyboard drag is verified via code + library docs, not yet confirmed hands-on by me personally.
 - The bulk job's `isStalled` heuristic (`STALL_AFTER_MS = 3000`) has never been observed actually
   firing — the mock engine ticks fast enough in practice that a genuine stall hasn't occurred.
 - A toast's Retry button has no guard against being clicked twice before the first retry resolves.
@@ -244,23 +265,30 @@ thread.
 
 ## What I'd do with another week, ranked
 
-1. **Batch the change-stream events a bulk job emits, or move its per-tick reconciliation off the
+1. **Fix the concurrent re-drag bug.** The brief weighs "how you handle async and optimistic
+   state" heaviest of everything it evaluates, and this is a real correctness bug in exactly that
+   mechanism: `pendingMoves` only tracks one anchor per card, so a second drag before the first
+   resolves corrupts the rollback and can produce a toast that lies about what happened. Fix is
+   straightforward — either disable dragging a card while it has a pending move (simplest), or
+   queue/chain moves per card instead of overwriting the anchor. Ranked above the bulk-job
+   performance regression below because this is a correctness gap, not a performance one.
+2. **Batch the change-stream events a bulk job emits, or move its per-tick reconciliation off the
    main thread.** Measured directly in `PERF.md`: emitting one change-stream event per
    successfully-moved card (fixed this session, so bulk moves actually reconcile into the board
    live instead of silently only changing server-side) turned out to cost real main-thread time —
    scroll frame time during a 25,000-card bulk job went from a mean 8.31ms idle to 218.62ms while
-   the job was actively ticking, a ~26× regression, with the worst frame at 325ms. Correctness was
-   chosen over this cost, but it's the single highest-priority thing to fix next: either coalesce
-   many per-tick moves into one batched event, or push the reconciliation work into an idle
-   callback / off the render-blocking path.
-2. **Real profiler measurements under a 100,000-row seed and a genuinely 500,000-row bulk filter**
+   the job was actively ticking, a ~26× regression, with the worst frame at 325ms. The precise
+   cause: every `applyStream*` handler does `new Map(opportunitiesById)` — a full O(total
+   opportunity count) copy — on every single event, even though no selector needs that particular
+   map's reference identity (unlike `orderByStage`'s per-stage arrays, which genuinely do).
+   Eliminating that copy removes the dominant cost without touching the correctness fix from
+   earlier this session.
+3. **Real profiler measurements under a 100,000-row seed and a genuinely 500,000-row bulk filter**
    — confirm or correct the "what breaks at 10×" predictions above with actual numbers instead of
    reasoning from the architecture.
-3. **A property-based test for the `stageAgg` invariant** — apply N random sequences of
+4. **A property-based test for the `stageAgg` invariant** — apply N random sequences of
    moves/edits/creates/deletes and assert the incremental aggregate always equals a full re-sum.
-4. **Confirm the keyboard path hands-on**, myself, without relying on library documentation or
-   code reading alone.
 5. **Chunk or defer `findMatchingIds`** so starting a bulk job on a much larger dataset doesn't
    block the main thread proportional to dataset size.
 6. **A visible on-board indicator for a card whose retry is already in flight**, closing the
-   double-retry gap above.
+   double-retry gap above (and directly related to item 1).
