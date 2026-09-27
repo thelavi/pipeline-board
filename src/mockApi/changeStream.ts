@@ -19,6 +19,17 @@ function emit(event: ChangeStreamEvent): void {
   for (const listener of listeners) listener(event)
 }
 
+/**
+ * Lets a write that happened OUTSIDE this file's own tick() loop (namely, the bulk-move
+ * job engine) notify the same subscribers a background stream tick would. Without this,
+ * a bulk job's moves are only visible in the mock db — the client board store, which only
+ * ever learns about changes through subscribeToChangeStream, would never hear about them
+ * and the moved cards would appear stuck in their old column until the next full refetch.
+ */
+export function emitChangeStreamEvent(event: ChangeStreamEvent): void {
+  emit(event)
+}
+
 function randomPick<T>(items: T[]): T | undefined {
   if (items.length === 0) return undefined
   return items[Math.floor(Math.random() * items.length)]

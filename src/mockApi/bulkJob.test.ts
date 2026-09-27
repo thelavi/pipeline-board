@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getBulkJobStatus, startBulkJob } from './bulkJobs'
+import { subscribeToChangeStream } from './changeStream'
 import { resetDb } from './db'
 import { useMockApiConfig } from './config'
+import type { ChangeStreamEvent } from './types'
 
 // 'closed-lost' is seeded with a fixed 50 rows (see STAGE_DEFS in db.ts) — a stable,
 // deterministic match count to build assertions on without depending on the random seed.
@@ -39,6 +41,34 @@ describe('partial failure bookkeeping', () => {
     expect(status.status).toBe('completed')
     expect(status.succeeded + status.failed).toBe(status.total)
     expect(status.failed).toBe(FAIL_COUNT)
+  })
+})
+
+describe('board reconciliation bridge', () => {
+  it('emits a move event for every successfully moved card, so the board store can reconcile it — not just the db', async () => {
+    useMockApiConfig.getState().set({ failureRate: 0, bulkJobChunkSize: 100, bulkJobTickMs: 5 })
+
+    const events: ChangeStreamEvent[] = []
+    const unsubscribe = subscribeToChangeStream((event) => events.push(event))
+
+    vi.useFakeTimers()
+    const { jobId, totalMatched } = startBulkJob({ stageId: 'closed-lost' }, 'contacted')
+    expect(totalMatched).toBe(TOTAL)
+
+    await vi.advanceTimersByTimeAsync(10)
+    unsubscribe()
+
+    const status = getBulkJobStatus(jobId)!
+    expect(status.status).toBe('completed')
+    expect(status.succeeded).toBe(TOTAL)
+
+    const moveEvents = events.filter((e) => e.type === 'move')
+    expect(moveEvents).toHaveLength(TOTAL)
+    for (const event of moveEvents) {
+      if (event.type !== 'move') continue
+      expect(event.fromStageId).toBe('closed-lost')
+      expect(event.opportunity.stageId).toBe('contacted')
+    }
   })
 })
 

@@ -1,5 +1,6 @@
 import { getMockApiConfig } from './config'
-import { findMatchingIds, moveOpportunityInDb } from './db'
+import { emitChangeStreamEvent } from './changeStream'
+import { findMatchingIds, getOpportunity, moveOpportunityInDb } from './db'
 import type { BulkFilter, BulkJobStatus } from './types'
 
 interface InternalJob extends BulkJobStatus {
@@ -41,9 +42,14 @@ function tick(): void {
         job.failed++
         continue
       }
+      const fromStageId = getOpportunity(id)?.stageId
       try {
-        moveOpportunityInDb(id, job.toStageId)
+        const updated = moveOpportunityInDb(id, job.toStageId)
         job.succeeded++
+        // The db write alone is invisible to the client — it only ever learns about
+        // changes through the change-stream subscription, so a bulk move must go
+        // through the same channel or the board's own copy of these cards never updates.
+        if (fromStageId) emitChangeStreamEvent({ type: 'move', opportunity: updated, fromStageId })
       } catch {
         job.failed++
       }
