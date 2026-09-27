@@ -10,10 +10,9 @@ const EMPTY_IDS: string[] = []
 
 interface ColumnProps {
   stage: Stage
-  allStages: Stage[]
 }
 
-export function Column({ stage, allStages }: ColumnProps) {
+export function Column({ stage }: ColumnProps) {
   const ids = useBoardStore((s) => s.orderByStage.get(stage.id) ?? EMPTY_IDS)
   const scrollRef = useRef<HTMLDivElement>(null)
   const virtualizer = useVirtualizedColumn(scrollRef, ids.length)
@@ -32,7 +31,7 @@ export function Column({ stage, allStages }: ColumnProps) {
                 className="column__row"
                 style={{ transform: `translateY(${virtualRow.start}px)` }}
               >
-                <Card opportunityId={opportunityId} stages={allStages} />
+                <Card opportunityId={opportunityId} />
               </div>
             )
           })}

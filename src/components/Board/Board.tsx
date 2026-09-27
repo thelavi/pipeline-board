@@ -48,7 +48,7 @@ export function Board() {
     >
       <div className="board">
         {stages.map((stage) => (
-          <Column key={stage.id} stage={stage} allStages={stages} />
+          <Column key={stage.id} stage={stage} />
         ))}
       </div>
     </DndContext>
