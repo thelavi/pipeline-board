@@ -142,26 +142,6 @@ body {
   color: #586170;
 }
 
-.badge {
-  font-size: 9.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 1px 5px;
-  border-radius: 4px;
-  font-weight: 600;
-}
-
-.badge--won {
-  background: #dff0e1;
-  color: #3f8a4c;
-}
-
-.badge--lost,
-.badge--abandoned {
-  background: #f8e2e2;
-  color: #b34343;
-}
-
 .card__move-to {
   font-size: 10.5px;
   border: 1px solid #c3cbd3;

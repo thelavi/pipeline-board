@@ -42,12 +42,7 @@ function CardImpl({ opportunityId, stages }: CardProps) {
         <span className="card__value">{formatMoney(opportunity.value)}</span>
       </div>
       <div className="card__meta">
-        <span className="card__owner">
-          {opportunity.owner}
-          {opportunity.status !== 'open' && (
-            <span className={`badge badge--${opportunity.status}`}>{opportunity.status}</span>
-          )}
-        </span>
+        <span className="card__owner">{opportunity.owner}</span>
         <select
           className="card__move-to"
           aria-label={`Move ${opportunity.name} to stage`}

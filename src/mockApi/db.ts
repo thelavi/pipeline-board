@@ -116,12 +116,20 @@ export function moveOpportunityInDb(id: string, toStageId: string): Opportunity 
   const toList = orderByStage.get(toStageId)
   if (!toList) throw new Error(`stage ${toStageId} not found`)
 
-  if (opp.stageId !== toStageId) {
+  const stageChanged = opp.stageId !== toStageId
+  if (stageChanged) {
     removeFromStageOrder(opp.stageId, id)
     toList.unshift(id)
   }
 
-  const updated: Opportunity = { ...opp, stageId: toStageId, updatedAt: Date.now(), version: opp.version + 1 }
+  // status is stage-correlated only at creation time (randomStatus); without this, a card
+  // seeded into Closed Won keeps its "won" badge forever, even after landing in some
+  // unrelated column via a later move — status must be reconciled on every real stage
+  // change, not just assigned once. randomStatus already returns 'open' for any
+  // non-terminal stage, so this both assigns won/lost on entry and clears it on exit.
+  const status = stageChanged ? randomStatus(toStageId) : opp.status
+
+  const updated: Opportunity = { ...opp, stageId: toStageId, status, updatedAt: Date.now(), version: opp.version + 1 }
   opportunities.set(id, updated)
   return updated
 }
